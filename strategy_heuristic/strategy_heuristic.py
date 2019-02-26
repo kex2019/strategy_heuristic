@@ -1,69 +1,39 @@
 import robotic_warehouse.robotic_warehouse as warehouse
 import robotic_warehouse_utils.path_finder as path_finder
 import robotic_warehouse_utils.data_collection as data_collection
+import strategy_heuristic.robot as robot
 import pandas as pd
 import random
 import time
 
 
-class Robot():
-    def __init__(self, capacity, pathfinder):
+class RobotSwarm():
+    def __init__(self, gym, capacity: int, a_star: "Astar Pathfinder",
+                 num_robots: int):
+        self.gym = gym
         self.capacity = capacity
-        self.instructions = []
-        self.instruction_pointer = 0
-        self.pathfinder = pathfinder
-        self.last_high_level_command_was_drop = False
+        self.a_star = a_star
+        self.num_robots = num_robots
 
-    def __call__(self, gym, robot, free_packages) -> "instruction":
-        """ IF there is something to do.. do it."""
-        if len(self.instructions) > self.instruction_pointer:
-            instruction = self.instructions[self.instruction_pointer]
-            self.instruction_pointer += 1
-            return instruction
+        self.tags = set()
+        self.robots = [
+            robot.Robot(gym, capacity, a_star, self.tags)
+            for _ in range(num_robots)
+        ]
 
-        position = robot.position
-        packages = robot.packages
-        """ If we are standing next to a package pick it up!"""
-        if len(packages) != self.capacity:
-            instruction = None
-            for fp in free_packages:
-                if path_finder.l1norm_dist(position, fp.start) == 1:
-                    instruction = gym.PICKUP_INSTRUCTION
+    def gc_tags(self, packages):
+        self.tags = self.tags.intersection(set(packages))
 
-            if instruction != None:
-                return instruction
-        """ If there is nothing to do and we have full capacity.. go drop shit."""
-        if len(packages) == self.capacity or\
-                (self.last_high_level_command_was_drop and len(packages) >= 1) or\
-                (len(free_packages) == 0 and len(packages) >= 1):
-            """ IF l1 norm to a drop off == 1 then we can drop of the packages. """
-            instruction = None
-            for package in packages:
-                if path_finder.l1norm_dist(position, package.dropoff) == 1:
-                    instruction = gym.DROP_INSTRUCTION
+    def __call__(self, robots, packages) -> "instructions":
+        """ Maybe dont do this each time?"""
+        self.gc_tags(packages)
 
-            self.last_high_level_command_was_drop = True
-            if instruction != None:
-                return instruction
-
-            self.instructions = self.pathfinder(
-                position,
-                self.pathfinder.available_pos_near(
-                    random.choice(packages).dropoff)).get_instructions()
-            self.instruction_pointer = 1
-            return self.instructions[0]
-        elif free_packages:
-            self.last_high_level_command_was_drop = False
-            """ If there is nothing to do, we dont have full capacity and there are packages waiting.. get them. """
-            target = random.choice(free_packages)
-            self.instructions = self.pathfinder(
-                position, self.pathfinder.available_pos_near(
-                    target.start)).get_instructions()
-            self.instruction_pointer = 1
-            return self.instructions[0]
-        else:
-            """ If there is nothing to do, we dont have full capactiy and there are no packages waiting.. do some random shit. """
-            return gym.PICKUP_INSTRUCTION
+        instructions = []
+        for i, robot in enumerate(self.robots):
+            instructions.append(
+                robot.run_standard_logic(robots[i].position,
+                                         robots[i].packages, packages))
+        return instructions
 
 
 def evaluate(**kwargs):
@@ -149,7 +119,7 @@ def evaluate(**kwargs):
     gym = data_collection.initGymCollect(gym, data, output, name, steps,
                                          collect)
 
-    R = [Robot(capacity, pf) for _ in range(robots)]
+    swarm = RobotSwarm(gym, capacity, pf, robots)
 
     render = False
     if "render" in kwargs:
@@ -162,9 +132,7 @@ def evaluate(**kwargs):
         if render:
             gym.render()
 
-        instructions = []
-        for i, robot in enumerate(R):
-            instructions.append(robot(gym, robots[i], packages))
+        instructions = swarm(robots, packages)
 
         (robots, packages), _, _, _ = gym.step(instructions)
 
