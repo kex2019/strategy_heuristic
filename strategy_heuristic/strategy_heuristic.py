@@ -7,7 +7,7 @@ import random
 import time
 
 
-class RobotSwarm():
+class RobotSwarmMiddle():
     def __init__(self, gym, capacity: int, a_star: "Astar Pathfinder",
                  num_robots: int):
         self.gym = gym
@@ -31,7 +31,51 @@ class RobotSwarm():
         instructions = []
         for i, robot in enumerate(self.robots):
             instructions.append(
-                robot.run_standard_logic(robots[i].position,
+                robot.run_standard_logic(robots[i].position, self.a_star.available_pos_near([self.gym.gym.map_height // 2, self.gym.gym.map_width // 2]),
+                                         robots[i].packages, packages))
+        return instructions
+
+
+class RobotSwarmEvenDistribution():
+    def __init__(self, gym, capacity: int, a_star: "Astar Pathfinder",
+                 num_robots: int):
+        self.gym = gym
+        self.capacity = capacity
+        self.a_star = a_star
+        self.num_robots = num_robots
+        self.idle_positions = []
+        self.distribute_robots(0, 0, self.gym.gym.map_width, self.gym.gym.map_height)
+
+
+        self.tags = set()
+        self.robots = [
+            robot.Robot(gym, capacity, a_star, self.tags)
+            for _ in range(num_robots)
+        ]
+
+
+    def distribute_robots(self, x0, y0, x1, y1):
+        if len(self.idle_positions) >= self.num_robots:
+            return
+        x = (x0 + x1) // 2
+        y = (y0 + y1) // 2
+        self.idle_positions.append(self.a_star.available_pos_near((y,x)))
+        self.distribute_robots(x0, x, y0, y)
+        self.distribute_robots(x0, x, y, y1)
+        self.distribute_robots(x, x1, y0, y)
+        self.distribute_robots(x, x1, y, y1)
+
+    def gc_tags(self, packages):
+        self.tags = self.tags.intersection(set(packages))
+
+    def __call__(self, robots, packages) -> "instructions":
+        """ Maybe dont do this each time?"""
+        self.gc_tags(packages)
+
+        instructions = []
+        for i, robot in enumerate(self.robots):
+            instructions.append(
+                robot.run_standard_logic(robots[i].position, self.idle_positions[i],
                                          robots[i].packages, packages))
         return instructions
 
@@ -119,8 +163,13 @@ def evaluate(**kwargs):
     gym = data_collection.initGymCollect(gym, data, output, name, steps,
                                          collect)
 
-    swarm = RobotSwarm(gym, capacity, pf, robots)
 
+    swarm = None
+    if "even" in kwargs:
+        swarm = RobotSwarmEvenDistribution(gym, capacity, pf, robots)
+    else:
+        swarm = RobotSwarmMiddle(gym, capacity, pf, robots)
+    
     render = False
     if "render" in kwargs:
         render = kwargs["render"]

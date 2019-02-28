@@ -46,9 +46,10 @@ class Robot():
                     )
                 )]
 
-    def run_standard_logic(self, position, packages, free_packages):
+    def run_standard_logic(self, position, idle_position, packages, free_packages):
+        non_tagged = self.get_non_tagged_packages(free_packages)
         """ If has instruction, run them """
-        if len(self.instructions) > self.eip:
+        if len(self.instructions) > self.eip and not (len(non_tagged) != 0 and self.state == Robot.NOTHING):
             i = self.instructions[self.eip]
             self.eip += 1
             return i
@@ -57,7 +58,6 @@ class Robot():
                 position, free_packages):
             return self.gym.PICKUP_INSTRUCTION
 
-        non_tagged = self.get_non_tagged_packages(free_packages)
         """ Check for standard drop conditions. """
         if len(packages) == self.capacity or\
             (self.state == Robot.DROPPING_OFF_PACKAGE and len(packages) >= 1) or\
@@ -96,4 +96,10 @@ class Robot():
             return self.instructions[0]
         """ At this point the robot has no standard logic.. unless we come up with more stuff. """
         self.state = Robot.NOTHING
+        self.instructions = self.a_star(
+            position, idle_position).get_instructions()
+        self.eip = 1
+        if self.instructions:
+            return self.instructions[0]
+
         return self.gym.PICKUP_INSTRUCTION
