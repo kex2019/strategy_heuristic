@@ -85,17 +85,24 @@ class Robot():
 
         """ If there are non-tagged packages we go get em. """
         if non_tagged:
-            self.state = Robot.WALKING_TO_PACKAGE
             closest = self.get_closest_package(position, non_tagged)
-            self.tagged_package.add(closest)
-            self.instructions = self.a_star(
-                position, self.a_star.available_pos_near(
-                    closest.start)).get_instructions()
-            """ Execute instruction. """
-            self.eip = 1
-            return self.instructions[0]
+            ourdistance = path_finder.l1norm_dist(position, closest.start)
+            distances = [path_finder.l1norm_dist(robot.position, closest.start) for robot in self.gym.gym.robots]
+            mindistance = min(distances)
+            if ourdistance <= mindistance:                
+                self.tagged_package.add(closest)
+                self.instructions = self.a_star(
+                    position, self.a_star.available_pos_near(
+                        closest.start)).get_instructions()
+                """ Execute instruction. """
+                self.state = Robot.WALKING_TO_PACKAGE
+                self.eip = 1
+                return self.instructions[0]
         """ At this point the robot has no standard logic.. unless we come up with more stuff. """
         self.state = Robot.NOTHING
+        if list(position) == list(idle_position):
+            return self.gym.PICKUP_INSTRUCTION
+
         self.instructions = self.a_star(
             position, idle_position).get_instructions()
         self.eip = 1

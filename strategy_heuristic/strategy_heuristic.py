@@ -5,7 +5,7 @@ import strategy_heuristic.robot as robot
 import pandas as pd
 import random
 import time
-
+import queue
 
 class RobotSwarmMiddle():
     def __init__(self, gym, capacity: int, a_star: "Astar Pathfinder",
@@ -55,18 +55,19 @@ class RobotSwarmEvenDistribution():
 
 
     def distribute_robots(self, x0, y0, x1, y1):
-        q = [(x0, x1, y0, y1)]
+        q = queue.Queue()
+        q.put((x0, x1, y0, y1))
         while True:
             if len(self.idle_positions) >= self.num_robots:
                 return
-            (x0, x1, y0, y1) = q.pop()
+            (x0, x1, y0, y1) = q.get()
             x = (x0 + x1) // 2
             y = (y0 + y1) // 2
             self.idle_positions.append(self.a_star.available_pos_near((y,x)))
-            q.append((x0, x, y0, y))
-            q.append((x0, x, y, y1))
-            q.append((x, x1, y0, y))
-            q.append((x, x1, y, y1))
+            q.put((x0, x, y0, y))
+            q.put((x0, x, y, y1))
+            q.put((x, x1, y0, y))
+            q.put((x, x1, y, y1))
 
     def gc_tags(self, packages):
         self.tags = self.tags.intersection(set(packages))
