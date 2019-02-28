@@ -45,7 +45,7 @@ class RobotSwarmEvenDistribution():
         self.num_robots = num_robots
         self.idle_positions = []
         self.distribute_robots(0, 0, self.gym.gym.map_width, self.gym.gym.map_height)
-
+        print(self.idle_positions)
 
         self.tags = set()
         self.robots = [
@@ -55,15 +55,18 @@ class RobotSwarmEvenDistribution():
 
 
     def distribute_robots(self, x0, y0, x1, y1):
-        if len(self.idle_positions) >= self.num_robots:
-            return
-        x = (x0 + x1) // 2
-        y = (y0 + y1) // 2
-        self.idle_positions.append(self.a_star.available_pos_near((y,x)))
-        self.distribute_robots(x0, x, y0, y)
-        self.distribute_robots(x0, x, y, y1)
-        self.distribute_robots(x, x1, y0, y)
-        self.distribute_robots(x, x1, y, y1)
+        q = [(x0, x1, y0, y1)]
+        while True:
+            if len(self.idle_positions) >= self.num_robots:
+                return
+            (x0, x1, y0, y1) = q.pop()
+            x = (x0 + x1) // 2
+            y = (y0 + y1) // 2
+            self.idle_positions.append(self.a_star.available_pos_near((y,x)))
+            q.append((x0, x, y0, y))
+            q.append((x0, x, y, y1))
+            q.append((x, x1, y0, y))
+            q.append((x, x1, y, y1))
 
     def gc_tags(self, packages):
         self.tags = self.tags.intersection(set(packages))
