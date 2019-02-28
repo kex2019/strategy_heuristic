@@ -1,13 +1,13 @@
 import strategy_heuristic.strategy_heuristic as sh
 print("Starting evaluation")
 sh.evaluate(
-    render=True,
-    robots=16+4+1,
-    spawn=20,
+    render=False,
+    robots=3,
+    spawn=5,
     capacity=3,
-    shelve_length=10,
-    shelve_width=5,
-    shelve_height=5,
+    shelve_length=2,
+    shelve_width=2,
+    shelve_height=2,
     steps=10000,
     periodicity_lower=100,
     periodicity_upper=300,
