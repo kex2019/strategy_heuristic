@@ -45,7 +45,6 @@ class RobotSwarmEvenDistribution():
         self.num_robots = num_robots
         self.idle_positions = []
         self.distribute_robots(0, 0, self.gym.gym.map_width, self.gym.gym.map_height)
-        print(self.idle_positions)
 
         self.tags = set()
         self.robots = [
