@@ -1,57 +1,56 @@
 import robotic_warehouse.robotic_warehouse as warehouse
-import robotic_warehouse_utils.path_finder as path_finder
 import robotic_warehouse_utils.data_collection as data_collection
-import strategy_heuristic.robot as robot
+import kex_robot.robot as KR
 import pandas as pd
 import random
 import time
 import queue
 
+
 class RobotSwarmMiddle():
-    def __init__(self, gym, capacity: int, a_star: "Astar Pathfinder",
-                 num_robots: int):
+    def __init__(self, robots, gym, capacity: int, num_robots: int):
         self.gym = gym
         self.capacity = capacity
-        self.a_star = a_star
         self.num_robots = num_robots
 
         self.tags = set()
-        self.robots = [
-            robot.Robot(gym, capacity, a_star, self.tags)
-            for _ in range(num_robots)
-        ]
+        self.robots = []
+        for i in range(num_robots):
+            self.robots.append(
+                KR.Robot(robots[i], gym.gym, capacity, self.tags, self.robots))
 
     def gc_tags(self, packages):
         self.tags = self.tags.intersection(set(packages))
 
-    def __call__(self, robots, packages) -> "instructions":
+    def idle(self, _):
+        return [self.gym.gym.map_height // 2, self.gym.gym.map_width // 2]
+
+    def __call__(self, packages) -> "instructions":
         """ Maybe dont do this each time?"""
         self.gc_tags(packages)
 
         instructions = []
-        for i, robot in enumerate(self.robots):
-            instructions.append(
-                robot.run_standard_logic(robots[i].position, self.a_star.available_pos_near([self.gym.gym.map_height // 2, self.gym.gym.map_width // 2]),
-                                         robots[i].packages, packages))
+        for _, robot in enumerate(self.robots):
+            robot.reservations = self.tags
+            instructions.append(robot(packages, self.idle))
         return instructions
 
 
 class RobotSwarmEvenDistribution():
-    def __init__(self, gym, capacity: int, a_star: "Astar Pathfinder",
-                 num_robots: int):
+    def __init__(self, robots, gym, capacity: int, num_robots: int):
         self.gym = gym
         self.capacity = capacity
-        self.a_star = a_star
         self.num_robots = num_robots
         self.idle_positions = []
-        self.distribute_robots(0, 0, self.gym.gym.map_width, self.gym.gym.map_height)
 
         self.tags = set()
-        self.robots = [
-            robot.Robot(gym, capacity, a_star, self.tags)
-            for _ in range(num_robots)
-        ]
+        self.robots = []
+        for i in range(num_robots):
+            self.robots.append(
+                KR.Robot(robots[i], gym.gym, capacity, self.tags, self.robots))
 
+        self.distribute_robots(0, 0, self.gym.gym.map_width,
+                               self.gym.gym.map_height)
 
     def distribute_robots(self, x0, y0, x1, y1):
         q = queue.Queue()
@@ -62,7 +61,7 @@ class RobotSwarmEvenDistribution():
             (x0, x1, y0, y1) = q.get()
             x = (x0 + x1) // 2
             y = (y0 + y1) // 2
-            self.idle_positions.append(self.a_star.available_pos_near((y,x)))
+            self.idle_positions.append(self.robots[0].walkable_near((y, x)))
             q.put((x0, x, y0, y))
             q.put((x0, x, y, y1))
             q.put((x, x1, y0, y))
@@ -71,15 +70,16 @@ class RobotSwarmEvenDistribution():
     def gc_tags(self, packages):
         self.tags = self.tags.intersection(set(packages))
 
-    def __call__(self, robots, packages) -> "instructions":
+    def __call__(self, packages) -> "instructions":
         """ Maybe dont do this each time?"""
         self.gc_tags(packages)
 
         instructions = []
         for i, robot in enumerate(self.robots):
+            robot.reservations = self.tags
             instructions.append(
-                robot.run_standard_logic(robots[i].position, self.idle_positions[i],
-                                         robots[i].packages, packages))
+                robot(packages, lambda _: self.idle_positions[i]))
+
         return instructions
 
 
@@ -161,32 +161,30 @@ def evaluate(**kwargs):
         periodicity_lower=periodicity_lower,
         periodicity_upper=periodicity_upper)
 
-    pf = path_finder.Astar(gym)
-
     gym = data_collection.initGymCollect(gym, data, output, name, steps,
                                          collect)
 
+    R, packages = gym.reset()
 
     swarm = None
     if "even" in kwargs:
-        swarm = RobotSwarmEvenDistribution(gym, capacity, pf, robots)
+        swarm = RobotSwarmEvenDistribution(R, gym, capacity, robots)
     else:
-        swarm = RobotSwarmMiddle(gym, capacity, pf, robots)
-    
+        swarm = RobotSwarmMiddle(R, gym, capacity, robots)
+
     render = False
     if "render" in kwargs:
         render = kwargs["render"]
 
-    (robots, packages), _, _, _ = gym.reset()
     curr_step = 0
     print()
     while True:
         if render:
             gym.render()
 
-        instructions = swarm(robots, packages)
+        instructions = swarm(packages)
 
-        (robots, packages), _, _, _ = gym.step(instructions)
+        (_, packages), _, _, _ = gym.step(instructions)
 
         if not (curr_step % 1000):
             print("{}/{}    ".format(curr_step, steps), end="\r")
